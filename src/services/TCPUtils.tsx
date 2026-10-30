@@ -4,6 +4,7 @@ import { useChunkStore } from '../db/chunkStore';
 import { Buffer } from 'buffer';
 import { FrameParser } from '../protocol/FrameParser';
 import { MessageType, CURRENT_PROTOCOL_VERSION } from '../protocol/ProtocolMessages';
+import { FileTransferManager } from './FileTransferManager';
 
 /**
  * Sends a message over either a FramedSocket or a raw TcpSocket using framed encoding.
@@ -28,6 +29,10 @@ export const safeSend = async (socket: any, message: any): Promise<boolean> => {
   return false;
 };
 
+/**
+ * Receiver handles incoming file transfer proposal.
+ * Creates a .part temporary file on disk and acknowledges readiness.
+ */
 export const receiveFileAck = async (
   data: any,
   socket: any,
@@ -36,32 +41,38 @@ export const receiveFileAck = async (
   const { setChunkStore, chunkStore } = useChunkStore.getState();
 
   if (chunkStore) {
-    Alert.alert('File Transfer In Progress', 'Please wait for the current file transfer to finish.');
+    Alert.alert('Transfer Busy', 'Please wait for current file transfer to finish.');
     return;
   }
 
   const fileData = {
-    id: data?.id || data?.transferId,
-    name: data?.name || data?.fileName,
-    size: data?.size || data?.fileSize || 0,
+    id: data?.id || data?.transferId || data?.fileId,
+    name: data?.name || data?.fileName || 'received_file',
+    size: Number(data?.size || data?.fileSize || 0),
     mimeType: data?.mimeType || 'file',
-    totalChunks: data?.totalChunks || 0,
+    totalChunks: Number(data?.totalChunks || 1),
+    chunkSize: Number(data?.chunkSize || FileTransferManager.getChunkSize()),
+    checksum: data?.checksum,
     available: false,
   };
 
+  const tempFilePath = FileTransferManager.getTempFilePath(fileData.id, fileData.name);
+
   setReceivedFiles((prevFiles: any) =>
     produce(prevFiles, (draft: any) => {
-      draft.push(fileData);
+      draft.push({
+        ...fileData,
+        tempFilePath,
+      });
     }),
   );
 
   setChunkStore({
-    id: fileData.id,
-    totalChunks: fileData.totalChunks,
-    name: fileData.name,
-    size: fileData.size,
-    mimeType: fileData.mimeType,
-    chunkArray: [],
+    ...fileData,
+    tempFilePath,
+    receivedChunksCount: 0,
+    receivedChunks: new Set<number>(),
+    chunkArray: [], // legacy compatibility
   });
 
   if (!socket) {
@@ -70,7 +81,7 @@ export const receiveFileAck = async (
   }
 
   try {
-    console.log('[TCPUtils] File acknowledged, requesting first chunk (0)');
+    console.log(`[TCPUtils] Initialized streaming receiver for "${fileData.name}" (${fileData.totalChunks} chunks)`);
     await safeSend(socket, {
       event: 'send_chunk_ack',
       type: MessageType.CHUNK_ACK,
@@ -87,6 +98,10 @@ export const receiveFileAck = async (
   }
 };
 
+/**
+ * Sender handles chunk request from receiver.
+ * Reads chunk from disk on-the-fly and sends framed packet.
+ */
 export const sendChunkAck = async (
   chunkIndex: number,
   socket: any,
@@ -106,13 +121,30 @@ export const sendChunkAck = async (
   }
 
   const totalChunks = currentChunkSet.totalChunks;
+  const chunkSize = currentChunkSet.chunkSize || FileTransferManager.getChunkSize();
 
   try {
-    const chunkBuffer = currentChunkSet?.chunkArray?.[chunkIndex];
-    if (!chunkBuffer) {
-      console.warn(`[TCPUtils] Chunk at index ${chunkIndex} does not exist in chunkArray`);
+    let base64Chunk: string;
+
+    // Use streaming disk read if filePath is available
+    if (currentChunkSet.filePath) {
+      base64Chunk = await FileTransferManager.readChunk(
+        currentChunkSet.filePath,
+        chunkIndex,
+        chunkSize,
+      );
+    } else if (
+      currentChunkSet.chunkArray &&
+      currentChunkSet.chunkArray[chunkIndex]
+    ) {
+      // Legacy fallback
+      base64Chunk = currentChunkSet.chunkArray[chunkIndex].toString('base64');
+    } else {
+      console.warn(`[TCPUtils] Chunk at index ${chunkIndex} could not be read`);
       return;
     }
+
+    const chunkByteLength = Math.round((base64Chunk.length * 3) / 4);
 
     // Send framed chunk data
     await safeSend(socket, {
@@ -125,12 +157,12 @@ export const sendChunkAck = async (
       chunkNo: chunkIndex,
       chunkIndex: chunkIndex,
       totalChunks: totalChunks,
-      chunkSize: chunkBuffer.length,
-      chunk: chunkBuffer.toString('base64'), // legacy field
-      data: chunkBuffer.toString('base64'),
+      chunkSize: chunkByteLength,
+      chunk: base64Chunk, // legacy field
+      data: base64Chunk,
     });
 
-    setTotalSendBytes((prevBytes: number) => prevBytes + chunkBuffer.length);
+    setTotalSendBytes((prevBytes: number) => prevBytes + chunkByteLength);
 
     if (chunkIndex + 1 >= totalChunks) {
       console.log('[TCPUtils] All chunks sent successfully for file:', currentChunkSet.id);
@@ -147,32 +179,49 @@ export const sendChunkAck = async (
       resetCurrentChunkSet();
     }
   } catch (error) {
-    console.error('[TCPUtils] Error sending chunk:', error);
+    console.error(`[TCPUtils] Error streaming chunk ${chunkIndex}:`, error);
   }
 };
 
+/**
+ * Receiver handles incoming chunk data.
+ * Writes chunk directly to disk without memory buffering.
+ */
 export const receivedChunkAck = async (
   chunk: string,
   chunkNo: number,
   socket: any,
   setTotalReceivedBytes: any,
-  generateFile: () => Promise<void>,
+  setReceivedFiles: any,
 ): Promise<void> => {
-  const { chunkStore, resetChunkStore, setChunkStore } = useChunkStore.getState();
+  const { chunkStore, resetChunkStore } = useChunkStore.getState();
 
   if (!chunkStore) {
-    Alert.alert('Transfer Error', 'There is no active file being received.');
+    console.warn('[TCPUtils] receivedChunkAck: No active chunkStore found');
     return;
   }
 
+  const chunkSize = chunkStore.chunkSize || FileTransferManager.getChunkSize();
+  const chunkByteLength = Math.round((chunk.length * 3) / 4);
+
   try {
-    const bufferChunk = Buffer.from(chunk, 'base64');
-    const updateChunkArray = [...(chunkStore.chunkArray || [])];
-    updateChunkArray[chunkNo] = bufferChunk;
-    setChunkStore({ ...chunkStore, chunkArray: updateChunkArray });
-    setTotalReceivedBytes((prevBytes: number) => prevBytes + bufferChunk.length);
+    if (chunkStore.tempFilePath) {
+      // Stream directly to disk!
+      await FileTransferManager.writeChunk(
+        chunkStore.tempFilePath,
+        chunkNo,
+        chunkSize,
+        chunk,
+      );
+    }
+
+    if (chunkStore.receivedChunks) {
+      chunkStore.receivedChunks.add(chunkNo);
+    }
+
+    setTotalReceivedBytes((prevBytes: number) => prevBytes + chunkByteLength);
   } catch (error) {
-    console.error('[TCPUtils] Error processing chunk:', error);
+    console.error(`[TCPUtils] Error streaming chunk ${chunkNo} to disk:`, error);
   }
 
   if (!socket) {
@@ -180,15 +229,45 @@ export const receivedChunkAck = async (
     return;
   }
 
-  if (chunkNo + 1 >= chunkStore.totalChunks) {
-    console.log('[TCPUtils] All chunks received! Reconstructing file...');
-    await generateFile();
+  const receivedCount = chunkStore.receivedChunks
+    ? chunkStore.receivedChunks.size
+    : chunkNo + 1;
+
+  if (receivedCount >= chunkStore.totalChunks) {
+    console.log(`[TCPUtils] All ${chunkStore.totalChunks} chunks received. Finalizing file...`);
+    try {
+      if (chunkStore.tempFilePath) {
+        const { finalPath, verified } = await FileTransferManager.finalizeReceivedFile(
+          chunkStore.tempFilePath,
+          chunkStore.name,
+          chunkStore.checksum,
+        );
+
+        setReceivedFiles((prevFiles: any) =>
+          produce(prevFiles, (draft: any) => {
+            const fileIndex = draft.findIndex(
+              (file: any) => file.id === chunkStore.id,
+            );
+            if (fileIndex !== -1) {
+              draft[fileIndex].uri = finalPath;
+              draft[fileIndex].available = true;
+              draft[fileIndex].verified = verified;
+            }
+          }),
+        );
+
+        console.log(`[TCPUtils] File successfully finalized at: ${finalPath} (Integrity verified: ${verified})`);
+      }
+    } catch (finalizeErr) {
+      console.error('[TCPUtils] Error finalizing received file:', finalizeErr);
+    }
+
     resetChunkStore();
     return;
   }
 
   try {
-    console.log(`[TCPUtils] Requesting next chunk: ${chunkNo + 1}/${chunkStore.totalChunks}`);
+    const nextChunk = chunkNo + 1;
     await safeSend(socket, {
       event: 'send_chunk_ack',
       type: MessageType.CHUNK_ACK,
@@ -196,9 +275,9 @@ export const receivedChunkAck = async (
       timestamp: Date.now(),
       transferId: chunkStore.id,
       fileId: chunkStore.id,
-      chunkNo: chunkNo + 1,
-      chunkIndex: chunkNo + 1,
-      nextExpectedChunk: chunkNo + 1,
+      chunkNo: nextChunk,
+      chunkIndex: nextChunk,
+      nextExpectedChunk: nextChunk,
     });
   } catch (error) {
     console.error('[TCPUtils] Error requesting next chunk:', error);

@@ -11,7 +11,6 @@ import { useChunkStore } from '../db/chunkStore';
 import TcpSocket from 'react-native-tcp-socket';
 import DeviceInfo from 'react-native-device-info';
 import { Alert, Platform } from 'react-native';
-import RNFS from 'react-native-fs';
 import { v4 as uuidv4 } from 'uuid';
 import { produce } from 'immer';
 import { Buffer } from 'buffer';
@@ -20,8 +19,8 @@ import { FramedSocket } from '../protocol/FramedSocket';
 import {
   MessageType,
   CURRENT_PROTOCOL_VERSION,
-  DEFAULT_CHUNK_SIZE,
 } from '../protocol/ProtocolMessages';
+import { FileTransferManager } from './FileTransferManager';
 
 interface TCPContextType {
   server: any;
@@ -105,56 +104,6 @@ export const TCPProvider: FC<{ children: React.ReactNode }> = ({
     handleCleanup();
   }, [client, serverSocket, server, handleCleanup]);
 
-  // Reconstruct file from received chunks
-  const generateFile = async () => {
-    const { chunkStore, resetChunkStore } = useChunkStore.getState();
-    if (!chunkStore) {
-      console.log('[TCPProvider] No Chunks or Files to Process');
-      return;
-    }
-    if (chunkStore.totalChunks !== chunkStore.chunkArray.length) {
-      console.error(
-        `[TCPProvider] Incomplete chunks: received ${chunkStore.chunkArray.length} of ${chunkStore.totalChunks}`,
-      );
-      return;
-    }
-
-    try {
-      const combinedChunks = Buffer.concat(chunkStore.chunkArray);
-      const platformPath =
-        Platform.OS === 'android'
-          ? `${RNFS.DownloadDirectoryPath}/`
-          : `${RNFS.DocumentDirectoryPath}/`;
-      const filePath = `${platformPath}${chunkStore.name}`;
-
-      await RNFS.writeFile(
-        filePath,
-        combinedChunks.toString('base64'),
-        'base64',
-      );
-
-      setReceivedFiles((prevFiles: any) =>
-        produce(prevFiles, (draftFiles: any) => {
-          const fileIndex = draftFiles.findIndex(
-            (file: any) => file.id === chunkStore.id,
-          );
-          if (fileIndex !== -1) {
-            draftFiles[fileIndex] = {
-              ...draftFiles[fileIndex],
-              uri: filePath,
-              available: true,
-            };
-          }
-        }),
-      );
-      console.log('[TCPProvider] File saved successfully to:', filePath);
-
-      resetChunkStore();
-    } catch (error) {
-      console.error('[TCPProvider] Error combining chunks into File:', error);
-    }
-  };
-
   // Dispatcher for incoming parsed protocol messages
   const handleIncomingMessage = useCallback(
     async (parsedData: any, socket: FramedSocket) => {
@@ -212,7 +161,7 @@ export const TCPProvider: FC<{ children: React.ReactNode }> = ({
         );
       }
 
-      // Chunk data received (handles both 'receive_chunk_ack' and 'received_chunk_ack')
+      // Chunk data received
       if (
         parsedData.event === 'receive_chunk_ack' ||
         parsedData.event === 'received_chunk_ack' ||
@@ -229,7 +178,7 @@ export const TCPProvider: FC<{ children: React.ReactNode }> = ({
           chunkIndex,
           socket,
           setTotalReceivedBytes,
-          generateFile,
+          setReceivedFiles,
         );
       }
 
@@ -360,7 +309,7 @@ export const TCPProvider: FC<{ children: React.ReactNode }> = ({
     [client, serverSocket],
   );
 
-  // Initiate file send
+  // Initiate file send with streaming disk I/O (zero RAM buffering)
   const sendFileAck = async (file: any, type: 'file' | 'image') => {
     if (currentChunkSet !== null) {
       Alert.alert('Transfer Busy', 'Please wait for current file transfer to complete.');
@@ -374,66 +323,57 @@ export const TCPProvider: FC<{ children: React.ReactNode }> = ({
     }
 
     try {
-      const normalizedPath =
-        Platform.OS === 'ios' ? file?.uri?.replace('file://', '') : file?.uri;
-      const fileData = await RNFS.readFile(normalizedPath, 'base64');
-      const buffer = Buffer.from(fileData, 'base64');
-      const CHUNK_SIZE = DEFAULT_CHUNK_SIZE; // 64 KB per chunk
-
-      let totalChunks = 0;
-      let offset = 0;
-      const chunkArray: Buffer[] = [];
-
-      while (offset < buffer.length) {
-        const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
-        chunkArray.push(chunk);
-        offset += CHUNK_SIZE;
-        totalChunks++;
-      }
-
-      const rawData = {
-        id: uuidv4(),
-        name: type === 'file' ? file?.name : file?.fileName,
-        size: buffer.length,
-        mimeType: type === 'file' ? 'file' : '.jpg',
-        totalChunks,
-      };
+      const fileMeta = await FileTransferManager.prepareSenderFile(
+        file?.uri,
+        uuidv4(),
+        type === 'file' ? file?.name : file?.fileName,
+        type === 'file' ? 'file' : '.jpg',
+      );
 
       setCurrentChunkSet({
-        id: rawData.id,
-        chunkArray,
-        totalChunks,
+        id: fileMeta.id,
+        filePath: fileMeta.uri,
+        name: fileMeta.name,
+        size: fileMeta.size,
+        mimeType: fileMeta.mimeType,
+        totalChunks: fileMeta.totalChunks,
+        chunkSize: fileMeta.chunkSize,
+        checksum: fileMeta.checksum,
+        chunkArray: [], // legacy compatibility
       });
 
       setSentFiles((prevData: any) =>
         produce(prevData, (draft: any) => {
           draft.push({
-            ...rawData,
+            ...fileMeta,
             uri: file?.uri,
             available: false,
           });
         }),
       );
 
-      console.log(`[TCPProvider] Sending file transfer request for "${rawData.name}" (${totalChunks} chunks)`);
+      console.log(
+        `[TCPProvider] Streaming transfer initiated for "${fileMeta.name}" (${fileMeta.totalChunks} chunks, ${fileMeta.size} bytes)`,
+      );
 
       await safeSend(activeSocket, {
         event: 'file_ack',
         type: MessageType.TRANSFER_REQUEST,
         version: CURRENT_PROTOCOL_VERSION,
         timestamp: Date.now(),
-        transferId: rawData.id,
-        fileId: rawData.id,
-        fileName: rawData.name,
-        fileSize: rawData.size,
-        mimeType: rawData.mimeType,
-        totalChunks,
-        chunkSize: CHUNK_SIZE,
-        file: rawData, // legacy compatibility
+        transferId: fileMeta.id,
+        fileId: fileMeta.id,
+        fileName: fileMeta.name,
+        fileSize: fileMeta.size,
+        mimeType: fileMeta.mimeType,
+        totalChunks: fileMeta.totalChunks,
+        chunkSize: fileMeta.chunkSize,
+        checksum: fileMeta.checksum,
+        file: fileMeta, // legacy compatibility
       });
     } catch (error) {
       console.error('[TCPProvider] Error in sendFileAck:', error);
-      Alert.alert('Error', 'Failed to read file for transfer');
+      Alert.alert('Error', 'Failed to prepare file for streaming transfer');
     }
   };
 
