@@ -37,6 +37,23 @@ export class FileTransferManager {
   }
 
   /**
+   * Sanitizes file name to prevent path traversal attacks (e.g. "../../etc/passwd").
+   */
+  public static sanitizeFileName(fileName: string): string {
+    if (!fileName || typeof fileName !== 'string') return 'received_file';
+    // Extract only the base name (strip any leading directory traversal)
+    const base = fileName.split(/[/\\]/).pop() || 'received_file';
+    let sanitized = base
+      .replace(/[\0\r\n\t]/g, '')
+      .replace(/[?%*:|"<>]/g, '_')
+      .replace(/\.{2,}/g, '.')
+      .trim();
+
+    sanitized = sanitized.replace(/^_+/, '').replace(/^\.+/, '');
+    return sanitized || 'received_file';
+  }
+
+  /**
    * Normalizes platform file URI to absolute file path for RNFS.
    */
   public static normalizePath(uri: string): string {
@@ -75,7 +92,8 @@ export class FileTransferManager {
       console.warn('[FileTransferManager] Native SHA-256 computation warning:', e);
     }
 
-    const name = customName || filePath.split('/').pop() || 'transferred_file';
+    const rawName = customName || filePath.split('/').pop() || 'transferred_file';
+    const name = this.sanitizeFileName(rawName);
 
     return {
       id,
@@ -117,8 +135,8 @@ export class FileTransferManager {
    */
   public static getTempFilePath(transferId: string, fileName: string): string {
     const destDir = this.getDownloadDirectory();
-    // Use .part extension to prevent incomplete files from appearing in user's library
-    return `${destDir}/.${transferId}_${fileName}.part`;
+    const cleanName = this.sanitizeFileName(fileName);
+    return `${destDir}/.${transferId}_${cleanName}.part`;
   }
 
   /**
@@ -149,10 +167,8 @@ export class FileTransferManager {
     expectedChecksum?: string,
   ): Promise<{ finalPath: string; verified: boolean }> {
     const destDir = this.getDownloadDirectory();
-    let finalPath = `${destDir}/${fileName}`;
-
-    // Prevent overwriting existing files: resolve collision
-    finalPath = await this.resolveFilenameCollision(destDir, fileName);
+    const cleanName = this.sanitizeFileName(fileName);
+    const finalPath = await this.resolveFilenameCollision(destDir, cleanName);
 
     // Verify SHA-256 if provided
     let verified = true;

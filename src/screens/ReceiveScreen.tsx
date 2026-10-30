@@ -183,7 +183,7 @@ const ReceiveScreen: FC = () => {
             />
           </View>
           <Image
-            source={require('../assets/images/profile2.jpg')}
+            source={require('../assets/images/profile2.png')}
             style={sendStyles.profileImage}
           />
         </View>

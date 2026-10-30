@@ -80,6 +80,13 @@ describe('FileTransferManager', () => {
     expect(RNFS.moveFile).toHaveBeenCalledWith('/downloads/.tx1_song.mp3.part', `${expectedDir}/song.mp3`);
   });
 
+  test('sanitizeFileName prevents directory traversal and illegal characters', () => {
+    expect(FileTransferManager.sanitizeFileName('../../etc/passwd')).toBe('passwd');
+    expect(FileTransferManager.sanitizeFileName('..\\..\\windows\\system32\\cmd.exe')).toBe('cmd.exe');
+    expect(FileTransferManager.sanitizeFileName('normal_file.pdf')).toBe('normal_file.pdf');
+    expect(FileTransferManager.sanitizeFileName('')).toBe('received_file');
+  });
+
   test('cleanupTempFile unlinks file if it exists', async () => {
     (RNFS.exists as jest.Mock).mockResolvedValueOnce(true);
     (RNFS.unlink as jest.Mock).mockResolvedValueOnce(undefined);
