@@ -27,7 +27,7 @@ import dgram from 'react-native-udp';
 import { Buffer } from 'buffer';
 
 const ReceiveScreen: FC = () => {
-  const { startServer, server, isConnected } = useTCP();
+  const { startServer, server, isConnected, disconnect } = useTCP();
   const [qrvalue, setQrvalue] = useState('');
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -104,6 +104,7 @@ const ReceiveScreen: FC = () => {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    disconnect();
     goBack();
   };
 
@@ -183,7 +184,7 @@ const ReceiveScreen: FC = () => {
             />
           </View>
           <Image
-            source={require('../assets/images/profile2.png')}
+            source={require('../assets/images/profile2.jpg')}
             style={sendStyles.profileImage}
           />
         </View>

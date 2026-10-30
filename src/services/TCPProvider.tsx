@@ -233,6 +233,13 @@ export const TCPProvider: FC<{ children: React.ReactNode }> = ({
       });
 
       newServer.on('error', (error: any) => {
+        if (
+          error?.code === 'EADDRINUSE' ||
+          (typeof error?.message === 'string' && error.message.includes('EADDRINUSE'))
+        ) {
+          console.warn('[TCPProvider] Server port already in use, reusing active socket');
+          return;
+        }
         console.error('[TCPProvider] Server Error:', error);
       });
 
