@@ -2,7 +2,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
-  
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
@@ -11,7 +10,6 @@ import {
 import React, { FC, useEffect, useState } from 'react';
 import { useTCP } from '../services/TCPProvider';
 import Icon from '../components/global/Icon';
-
 import { resetAndNavigate } from '../utils/NavigationUtil';
 import LinearGradient from 'react-native-linear-gradient';
 import { sendStyles } from '../styles/sendStyles';
@@ -102,6 +100,19 @@ const ConnectionScreen: FC = () => {
             <CustomText numberOfLines={1} fontFamily="OKRA-Medium" fontSize={8}>
               {item.mimeType} - {formatFileSize(item.size)}
             </CustomText>
+            {item?.verified && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                <Icon
+                  name="checkmark-circle"
+                  size={10}
+                  color="#2e7d32"
+                  iconsFamily="Ionicons"
+                />
+                <CustomText fontFamily="OKRA-Bold" fontSize={7} color="#2e7d32">
+                  SHA-256 Verified
+                </CustomText>
+              </View>
+            )}
           </View>
         </View>
         {item?.available ? (
@@ -133,7 +144,12 @@ const ConnectionScreen: FC = () => {
             </CustomText>
           </TouchableOpacity>
         ) : (
-          <ActivityIndicator color={Colors.primary} size="small" />
+          <View style={{ alignItems: 'center', minWidth: 45 }}>
+            <ActivityIndicator color={Colors.primary} size="small" />
+            <CustomText fontFamily="OKRA-Medium" fontSize={7} color="#666">
+              Transferring
+            </CustomText>
+          </View>
         )}
       </View>
     );

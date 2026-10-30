@@ -6,6 +6,47 @@ import { FrameParser } from '../protocol/FrameParser';
 import { MessageType, CURRENT_PROTOCOL_VERSION } from '../protocol/ProtocolMessages';
 import { FileTransferManager } from './FileTransferManager';
 
+let chunkAckTimeout: NodeJS.Timeout | null = null;
+
+const clearChunkTimeout = () => {
+  if (chunkAckTimeout) {
+    clearTimeout(chunkAckTimeout);
+    chunkAckTimeout = null;
+  }
+};
+
+const armChunkTimeout = (
+  socket: any,
+  transferId: string,
+  expectedChunk: number,
+  retriesLeft = 3,
+) => {
+  clearChunkTimeout();
+  if (retriesLeft <= 0) {
+    console.warn(`[TCPUtils] Max retry attempts reached for chunk ${expectedChunk}`);
+    return;
+  }
+
+  chunkAckTimeout = setTimeout(async () => {
+    console.warn(
+      `[TCPUtils] Chunk ${expectedChunk} timeout. Re-requesting chunk (${retriesLeft} retries left)...`,
+    );
+    await safeSend(socket, {
+      event: 'send_chunk_ack',
+      type: MessageType.CHUNK_ACK,
+      version: CURRENT_PROTOCOL_VERSION,
+      timestamp: Date.now(),
+      transferId,
+      fileId: transferId,
+      chunkNo: expectedChunk,
+      chunkIndex: expectedChunk,
+      nextExpectedChunk: expectedChunk,
+    });
+    // Arm next timeout with decremented retry counter
+    armChunkTimeout(socket, transferId, expectedChunk, retriesLeft - 1);
+  }, 4000);
+};
+
 /**
  * Sends a message over either a FramedSocket or a raw TcpSocket using framed encoding.
  */
@@ -54,6 +95,7 @@ export const receiveFileAck = async (
     chunkSize: Number(data?.chunkSize || FileTransferManager.getChunkSize()),
     checksum: data?.checksum,
     available: false,
+    verified: false,
   };
 
   const tempFilePath = FileTransferManager.getTempFilePath(fileData.id, fileData.name);
@@ -82,6 +124,8 @@ export const receiveFileAck = async (
 
   try {
     console.log(`[TCPUtils] Initialized streaming receiver for "${fileData.name}" (${fileData.totalChunks} chunks)`);
+    armChunkTimeout(socket, fileData.id, 0);
+
     await safeSend(socket, {
       event: 'send_chunk_ack',
       type: MessageType.CHUNK_ACK,
@@ -94,6 +138,7 @@ export const receiveFileAck = async (
       nextExpectedChunk: 0,
     });
   } catch (error) {
+    clearChunkTimeout();
     console.error('[TCPUtils] Error requesting first chunk:', error);
   }
 };
@@ -194,6 +239,8 @@ export const receivedChunkAck = async (
   setTotalReceivedBytes: any,
   setReceivedFiles: any,
 ): Promise<void> => {
+  clearChunkTimeout();
+
   const { chunkStore, resetChunkStore } = useChunkStore.getState();
 
   if (!chunkStore) {
@@ -234,6 +281,7 @@ export const receivedChunkAck = async (
     : chunkNo + 1;
 
   if (receivedCount >= chunkStore.totalChunks) {
+    clearChunkTimeout();
     console.log(`[TCPUtils] All ${chunkStore.totalChunks} chunks received. Finalizing file...`);
     try {
       if (chunkStore.tempFilePath) {
@@ -268,6 +316,8 @@ export const receivedChunkAck = async (
 
   try {
     const nextChunk = chunkNo + 1;
+    armChunkTimeout(socket, chunkStore.id, nextChunk);
+
     await safeSend(socket, {
       event: 'send_chunk_ack',
       type: MessageType.CHUNK_ACK,
@@ -280,6 +330,7 @@ export const receivedChunkAck = async (
       nextExpectedChunk: nextChunk,
     });
   } catch (error) {
+    clearChunkTimeout();
     console.error('[TCPUtils] Error requesting next chunk:', error);
   }
 };
