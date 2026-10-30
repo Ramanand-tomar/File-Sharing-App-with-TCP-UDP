@@ -8,16 +8,16 @@ import Animated, {
   withTiming,
   withRepeat,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'react-native-linear-gradient';
+import LinearGradient from 'react-native-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 import { multiColor } from '../../utils/Constants';
 import CustomText from '../global/CustomText';
 import Icon from '../global/Icon';
 import { useTCP } from '../../services/TCPProvider';
-import { start } from 'node:repl';
+
 import { getLocalIPAddress } from '../../utils/networkUtils';
 import DeviceInfo from 'react-native-device-info';
-import { on } from 'node:cluster';
+
 import { navigate } from '../../utils/NavigationUtil';
 interface ModalProps {
   visible: boolean;

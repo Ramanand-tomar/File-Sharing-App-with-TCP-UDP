@@ -1,7 +1,8 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
-  SafeAreaViewBase,
+  
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
@@ -145,7 +146,7 @@ const ConnectionScreen: FC = () => {
       start={{ x: 0, y: 1 }}
       end={{ x: 0, y: 0 }}
     >
-      <SafeAreaViewBase />
+      <SafeAreaView />
       <View style={sendStyles.mainContainer}>
         <View style={connectionStyles.container}>
           <View style={connectionStyles.connectionContainer}>

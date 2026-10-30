@@ -4,6 +4,7 @@ import Navigation from './src/navigation/Navigation'
 import { request } from 'react-native-permissions'
 import { requestPhotoPermission } from './src/utils/Constants'
 import { checkFilePermissions } from './src/utils/libraryHelpers'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 const App = () => {
 
@@ -12,8 +13,11 @@ const App = () => {
     checkFilePermissions(Platform.OS);
   },[])
 
-
-  return <Navigation/>;
+  return (
+    <SafeAreaProvider>
+      <Navigation/>
+    </SafeAreaProvider>
+  );
 }
 
 export default App

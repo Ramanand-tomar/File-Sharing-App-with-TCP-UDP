@@ -1,7 +1,8 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
-  SafeAreaViewBase,
+  
   TouchableOpacity,
   Image,
 } from 'react-native';
@@ -16,7 +17,7 @@ const HomeHeader = () => {
   const [isVisible, setVisible] = useState(false);
   return (
     <View>
-      <SafeAreaViewBase />
+      <SafeAreaView />
       <View style={[commonStyles.flexRowBetween, homeHeaderStyles.container]}>
         <TouchableOpacity>
           <Icon iconsFamily="Ionicons" name="menu" size={22} color="#fff" />

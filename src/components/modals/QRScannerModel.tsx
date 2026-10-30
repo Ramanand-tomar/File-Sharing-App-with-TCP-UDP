@@ -15,7 +15,7 @@ import Animated, {
   withTiming,
   withRepeat,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'react-native-linear-gradient';
+import LinearGradient from 'react-native-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 import { multiColor } from '../../utils/Constants';
 import CustomText from '../global/CustomText';
@@ -27,7 +27,7 @@ import {
 } from 'react-native-vision-camera';
 import { check } from 'react-native-permissions';
 import { useTCP } from '../../services/TCPProvider';
-import { parse } from 'node:path';
+
 import { navigate } from '../../utils/NavigationUtil';
 interface ModalProps {
   visible: boolean;

@@ -6,7 +6,7 @@ import { Colors } from '../../utils/Constants';
 import CustomText from '../global/CustomText';
 import { useTCP } from '../../services/TCPProvider';
 import { navigate } from '../../utils/NavigationUtil';
-import { on } from 'node:cluster';
+
 import { pickDocument, pickImage } from '../../utils/libraryHelpers';
 
 const Options: FC<{

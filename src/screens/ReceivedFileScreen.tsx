@@ -1,4 +1,5 @@
-import { View, Text, Platform, SafeAreaViewBase, ActivityIndicator, FlatList, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, Platform,  ActivityIndicator, FlatList, TouchableOpacity } from 'react-native';
 import React, { FC, useEffect, useState } from 'react';
 import RNFS from 'react-native-fs';
 import Icon from '../components/global/Icon';
@@ -139,7 +140,7 @@ const ReceivedFileScreen: FC = () => {
       end={{ x: 0, y: 0 }}
       style={sendStyles.container}
     >
-        <SafeAreaViewBase />
+        <SafeAreaView />
         <View style={sendStyles.mainContainer}>
             <CustomText
             fontFamily='OKRA-Bold'

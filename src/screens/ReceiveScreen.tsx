@@ -1,7 +1,8 @@
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
-  SafeAreaViewBase,
+  
   Touchable,
   TouchableOpacity,
   Image,
@@ -128,7 +129,7 @@ const ReceiveScreen: FC = () => {
       end={{ x: 0, y: 1 }}
       style={sendStyles.container}
     >
-      <SafeAreaViewBase />
+      <SafeAreaView />
       <View style={sendStyles.mainContainer}>
         <View style={sendStyles.infoContainer}>
           <Icon

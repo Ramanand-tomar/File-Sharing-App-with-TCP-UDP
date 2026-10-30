@@ -1,4 +1,5 @@
-import { View, Text, SafeAreaViewBase, Touchable, TouchableOpacity, Image, Easing } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text,  Touchable, TouchableOpacity, Image, Easing } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { useTCP } from '../services/TCPProvider';
 import { Line } from 'react-native-svg';
@@ -140,7 +141,7 @@ const SendScreen = () => {
       start={{ x: 0, y: 1}}
       end={{ x: 0, y: 0 }}
     >
-      <SafeAreaViewBase />
+      <SafeAreaView />
 
       <View style={sendStyles.mainContainer}>
         <View style={sendStyles.infoContainer}>
