@@ -30,6 +30,7 @@ const Navigation:FC = () => {
         <Stack.Screen name="SendScreen" component={SendScreen} />
         <Stack.Screen name="ReceiveScreen" component={ReceiveScreen} />
         <Stack.Screen name="ReceiveFileScreen" component={ReceivedFileScreen} />
+        <Stack.Screen name="ReceivedFileScreen" component={ReceivedFileScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

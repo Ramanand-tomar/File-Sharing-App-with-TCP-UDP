@@ -16,7 +16,7 @@ import QRGenerateModal from '../modals/QRGenerateModal';
 const HomeHeader = () => {
   const [isVisible, setVisible] = useState(false);
   return (
-    <View>
+    <View style={homeHeaderStyles.mainContainer}>
       <SafeAreaView />
       <View style={[commonStyles.flexRowBetween, homeHeaderStyles.container]}>
         <TouchableOpacity>
