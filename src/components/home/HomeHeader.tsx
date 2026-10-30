@@ -1,32 +1,42 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  View,
-  Text,
-  
-  TouchableOpacity,
-  Image,
-} from 'react-native';
+import { View, TouchableOpacity } from 'react-native';
 import React, { useState } from 'react';
-import { commonStyles } from '../../styles/commonStyles';
 import { homeHeaderStyles } from '../../styles/homeHeaderStyles';
 import Icon from '../global/Icon';
 import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { screenHeight, screenWidth, svgPath } from '../../utils/Constants';
 import QRGenerateModal from '../modals/QRGenerateModal';
+import { AppLogoSvg } from '../svgs/AppLogoSvg';
+import CustomText from '../global/CustomText';
+
 const HomeHeader = () => {
   const [isVisible, setVisible] = useState(false);
+
   return (
     <View style={homeHeaderStyles.mainContainer}>
       <SafeAreaView />
-      <View style={[commonStyles.flexRowBetween, homeHeaderStyles.container]}>
-        <TouchableOpacity>
-          <Icon iconsFamily="Ionicons" name="menu" size={22} color="#fff" />
+      <View style={homeHeaderStyles.container}>
+        <View style={homeHeaderStyles.brandContainer}>
+          <AppLogoSvg size={38} />
+          <View style={homeHeaderStyles.brandTextContainer}>
+            <CustomText fontFamily="OKRA-ExtraBold" fontSize={18} color="#ffffff">
+              AirShare
+            </CustomText>
+            <CustomText fontFamily="OKRA-Medium" fontSize={9} color="#E0F2FE">
+              Ultra Fast P2P Transfer
+            </CustomText>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={homeHeaderStyles.qrHeaderButton}
+          onPress={() => setVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Icon iconsFamily="Ionicons" name="qr-code-outline" size={20} color="#fff" />
         </TouchableOpacity>
-        <Image
-          source={require('../../assets/images/logo_t.png')}
-          style={homeHeaderStyles.profile}
-        />
       </View>
+
       <Svg
         height={screenHeight * 0.18}
         width={screenWidth}
@@ -42,12 +52,13 @@ const HomeHeader = () => {
         <Path fill="#80BFFF" d={svgPath} />
         <Path fill="url(#grad)" d={svgPath} />
       </Svg>
-      {isVisible && 
+
+      {isVisible && (
         <QRGenerateModal
           visible={isVisible}
           onClose={() => setVisible(false)}
         />
-      }
+      )}
     </View>
   );
 };

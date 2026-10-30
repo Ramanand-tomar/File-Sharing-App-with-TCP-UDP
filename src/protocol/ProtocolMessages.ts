@@ -199,3 +199,4 @@ export function isProtocolMessage(msg: any): msg is ProtocolMessage {
     Object.values(MessageType).includes(msg.type as MessageType)
   );
 }
+

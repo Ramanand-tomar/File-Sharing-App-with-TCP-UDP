@@ -104,3 +104,4 @@ describe('FramedSocket', () => {
     expect(hadError).toBe(true);
   });
 });
+

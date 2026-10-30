@@ -25,6 +25,7 @@ import {
 } from '../utils/networkUtils';
 import dgram from 'react-native-udp';
 import { Buffer } from 'buffer';
+import { DeviceRadarCoreSvg } from '../components/svgs/DeviceRadarCoreSvg';
 
 const ReceiveScreen: FC = () => {
   const { startServer, server, isConnected, disconnect } = useTCP();
@@ -183,10 +184,9 @@ const ReceiveScreen: FC = () => {
               hardwareAccelerationAndroid
             />
           </View>
-          <Image
-            source={require('../assets/images/profile2.jpg')}
-            style={sendStyles.profileImage}
-          />
+          <View style={{ zIndex: 5 }}>
+            <DeviceRadarCoreSvg size={62} />
+          </View>
         </View>
         <TouchableOpacity style={sendStyles.backButton} onPress={handleGoBack}>
           <Icon

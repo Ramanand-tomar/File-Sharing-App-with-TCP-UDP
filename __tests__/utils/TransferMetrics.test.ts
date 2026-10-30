@@ -30,3 +30,4 @@ describe('TransferMetrics', () => {
     expect(TransferMetrics.formatEta(95)).toBe('1m 35s');
   });
 });
+

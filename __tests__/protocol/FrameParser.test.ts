@@ -137,3 +137,4 @@ describe('FrameParser', () => {
     expect(parser.bufferedLength).toBe(0);
   });
 });
+

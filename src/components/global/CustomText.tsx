@@ -11,6 +11,7 @@ interface CustomTextProps {
   fontFamily?:
     | 'OKRA-Regular'
     | 'OKRA-Bold'
+    | 'OKRA-ExtraBold'
     | 'OKRA-Medium'
     | 'OKRA-Light'
     | 'OKRA-Black';

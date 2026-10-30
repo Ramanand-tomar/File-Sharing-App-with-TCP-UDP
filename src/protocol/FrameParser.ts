@@ -197,3 +197,4 @@ export class FrameParser {
     return this.buffer.length;
   }
 }
+

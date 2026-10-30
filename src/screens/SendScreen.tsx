@@ -20,6 +20,7 @@ import LottieView from 'lottie-react-native';
 import { goBack, navigate } from '../utils/NavigationUtil';
 import dgram from 'react-native-udp';
 import { parseConnectionPayload } from '../utils/networkUtils';
+import { DeviceRadarCoreSvg } from '../components/svgs/DeviceRadarCoreSvg';
 
 const SendScreen = () => {
   const { connectToServer, isConnected } = useTCP();
@@ -228,10 +229,9 @@ const SendScreen = () => {
               </Animated.View>
             ))}
           </View>
-          <Image
-            source={require('../assets/images/profile.jpg')}
-            style={sendStyles.profileImage}
-          />
+          <View style={{ zIndex: 5 }}>
+            <DeviceRadarCoreSvg size={62} />
+          </View>
         </View>
         <TouchableOpacity onPress={handleGoBack} style={sendStyles.backButton}>
           <Icon
