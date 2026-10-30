@@ -1,8 +1,8 @@
-import { View, Text } from 'react-native'
+import { View, Text, ScrollView } from 'react-native'
 import React, { FC } from 'react'
 import { commonStyles } from '../styles/commonStyles'
 import HomeHeader from '../components/home/HomeHeader'
-import { ScrollView } from 'react-native-reanimated/lib/typescript/Animated'
+
 import SendReceiveButton from '../components/home/SendReceiveButton'
 import Options from '../components/home/Options'
 import Misc from '../components/home/Misc'

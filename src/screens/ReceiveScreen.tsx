@@ -176,7 +176,7 @@ const ReceiveScreen: FC = () => {
           <View style={sendStyles.lottieContainer}>
             <LottieView
               style={sendStyles.lottie}
-              source={require('../../assets/animations/scan2.json')}
+              source={require('../assets/animations/scan2.json')}
               autoPlay
               loop={true}
               hardwareAccelerationAndroid
