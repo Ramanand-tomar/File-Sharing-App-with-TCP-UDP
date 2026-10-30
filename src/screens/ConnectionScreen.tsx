@@ -11,7 +11,7 @@ import {
 import React, { FC, useEffect, useState } from 'react';
 import { useTCP } from '../services/TCPProvider';
 import Icon from '../components/global/Icon';
-import { send } from 'process';
+
 import { resetAndNavigate } from '../utils/NavigationUtil';
 import LinearGradient from 'react-native-linear-gradient';
 import { sendStyles } from '../styles/sendStyles';
