@@ -14,18 +14,17 @@ import { multiColor } from '../../utils/Constants';
 import CustomText from '../global/CustomText';
 import Icon from '../global/Icon';
 import { useTCP } from '../../services/TCPProvider';
-
-import { getLocalIPAddress } from '../../utils/networkUtils';
+import { getLocalIPAddress, createDiscoveryBeacon } from '../../utils/networkUtils';
 import DeviceInfo from 'react-native-device-info';
-
 import { navigate } from '../../utils/NavigationUtil';
+
 interface ModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
 const QRGenerateModal: FC<ModalProps> = ({ visible, onClose }) => {
-  const {isConnected , startServer , server} = useTCP();
+  const { isConnected, startServer, server } = useTCP();
   const [loading, setLoading] = useState(false);
   const [qrCode, setQrCode] = useState('Ram');
   const shimmerTranslatex = useSharedValue(-300);
@@ -33,30 +32,18 @@ const QRGenerateModal: FC<ModalProps> = ({ visible, onClose }) => {
     transform: [{ translateX: shimmerTranslatex.value }],
   }));
 
-
-  const setupServer = async()=>{
+  const setupServer = async () => {
     const deviceName = await DeviceInfo.getDeviceName();
     const ip = await getLocalIPAddress();
     const port = 4000;
-    if(server){
-      const qrValue = `tcp://${ip}:${port}|${deviceName}`;
-      setQrCode(qrValue);
-      setLoading(false);
-      return;
-      
+    if (!server) {
+      startServer(port);
     }
-    startServer(port);
-    const qrValue = `tcp://${ip}:${port}|${deviceName}`;
-    setQrCode(qrValue);
-    console.log(`Server info : ${ip}:${port}`);
+    const beacon = createDiscoveryBeacon(ip, port, deviceName);
+    setQrCode(beacon);
+    console.log(`[QRGenerateModal] Server info: ${ip}:${port}`);
     setLoading(false);
-  }
-
-
-
-
-
-
+  };
 
   useEffect(() => {
     shimmerTranslatex.value = withRepeat(
@@ -73,14 +60,12 @@ const QRGenerateModal: FC<ModalProps> = ({ visible, onClose }) => {
     }
   }, [visible]);
 
-
   useEffect(() => {
-    console.log('TCPProvider : is connected to ', isConnected);
-    if(isConnected){
+    if (isConnected) {
       onClose();
       navigate('ConnectionScreen');
     }
-  })
+  }, [isConnected]);
 
   return (
     <Modal
@@ -119,10 +104,10 @@ const QRGenerateModal: FC<ModalProps> = ({ visible, onClose }) => {
         </View>
         <View style={modalStyles.info}>
           <CustomText style={modalStyles.infoText1}>
-            Ensure you 're on the same Wi-Fi network.
+            Ensure you're on the same Wi-Fi network.
           </CustomText>
           <CustomText style={modalStyles.infoText2}>
-            Ask the sender to scan this QR code to connect annd transfer the
+            Ask the sender to scan this QR code to connect and transfer the
             file
           </CustomText>
         </View>
@@ -132,9 +117,10 @@ const QRGenerateModal: FC<ModalProps> = ({ visible, onClose }) => {
           style={{ alignSelf: 'center' }}
         />
         <TouchableOpacity
-          onPress={()=>onClose()}
-          style={modalStyles.closeButton}>
-          <Icon name="close" iconsFamily='Ionicons' size={24} color="#000" />
+          onPress={() => onClose()}
+          style={modalStyles.closeButton}
+        >
+          <Icon name="close" iconsFamily="Ionicons" size={24} color="#000" />
         </TouchableOpacity>
       </View>
     </Modal>

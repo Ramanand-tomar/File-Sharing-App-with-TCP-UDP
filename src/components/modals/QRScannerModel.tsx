@@ -27,16 +27,16 @@ import {
 } from 'react-native-vision-camera';
 import { check } from 'react-native-permissions';
 import { useTCP } from '../../services/TCPProvider';
-
+import { parseConnectionPayload } from '../../utils/networkUtils';
 import { navigate } from '../../utils/NavigationUtil';
+
 interface ModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
 const QRScannerModel: FC<ModalProps> = ({ visible, onClose }) => {
-
-  const {connectToServer , isConnected} = useTCP();
+  const { connectToServer, isConnected } = useTCP();
   const [loading, setLoading] = useState(false);
   const [codeFound, setCodeFound] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
@@ -45,6 +45,7 @@ const QRScannerModel: FC<ModalProps> = ({ visible, onClose }) => {
   const shimmerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: shimmerTranslatex.value }],
   }));
+
   useEffect(() => {
     const checkPermission = async () => {
       const cameraPermission = await Camera.requestCameraPermission();
@@ -69,36 +70,41 @@ const QRScannerModel: FC<ModalProps> = ({ visible, onClose }) => {
     );
   }, [shimmerTranslatex]);
 
-  const handleScan = (data:any)=>{
-    const [connectionData , deviceName] = data.replace('tcp://','').split('|');
-        const [host, port] = connectionData?.split(':');
-        // connection to server
-        connectToServer(host , parseInt(port,10) , deviceName);
-  }
+  const handleScan = (data: any) => {
+    const target = parseConnectionPayload(data);
+    if (target) {
+      console.log(`[QRScanner] Connecting to ${target.host}:${target.port} (${target.deviceName})`);
+      connectToServer(target.host, target.port, target.deviceName);
+    } else {
+      console.warn('[QRScanner] Unrecognized QR payload:', data);
+    }
+  };
 
-  const codeScanner = useMemo<CodeScanner>(()=>({
-    codeTypes : ['qr' , 'codabar'],
-    onCodeScanned: (codes) => {
-        if(codeFound){
-            return
+  const codeScanner = useMemo<CodeScanner>(
+    () => ({
+      codeTypes: ['qr', 'codabar'],
+      onCodeScanned: codes => {
+        if (codeFound) {
+          return;
         }
         console.log(`Scanned code : ${codes.length} codes!`);
-        if(codes?.length >0 ){
-            const scannedData = codes[0].value;
-            console.log(scannedData);
-            setCodeFound(true);
-            handleScan(scannedData);
+        if (codes?.length > 0) {
+          const scannedData = codes[0].value;
+          console.log(scannedData);
+          setCodeFound(true);
+          handleScan(scannedData);
         }
-    }
+      },
+    }),
+    [codeFound],
+  );
 
-  }),[codeFound])
-
-  useEffect(()=>{
-    if(isConnected){
-        onClose();
-        navigate('ConnectionScreen');
+  useEffect(() => {
+    if (isConnected) {
+      onClose();
+      navigate('ConnectionScreen');
     }
-  },[isConnected])
+  }, [isConnected]);
 
   return (
     <Modal
@@ -148,7 +154,7 @@ const QRScannerModel: FC<ModalProps> = ({ visible, onClose }) => {
             Ensure you 're on the same Wi-Fi network.
           </CustomText>
           <CustomText style={modalStyles.infoText2}>
-            Ask the sender to scan this QR code to connect annd transfer the
+            Ask the sender to scan this QR code to connect and transfer the
             file
           </CustomText>
         </View>

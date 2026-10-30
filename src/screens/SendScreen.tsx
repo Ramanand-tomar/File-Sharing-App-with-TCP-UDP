@@ -1,8 +1,14 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text,  Touchable, TouchableOpacity, Image, Easing } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  Easing,
+  Animated,
+} from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { useTCP } from '../services/TCPProvider';
-import { Line } from 'react-native-svg';
 import LinearGradient from 'react-native-linear-gradient';
 import { sendStyles } from '../styles/sendStyles';
 import QRScannerModel from '../components/modals/QRScannerModel';
@@ -11,236 +17,238 @@ import CustomText from '../components/global/CustomText';
 import BreakerText from '../components/ui/BreakerText';
 import { Colors, screenWidth } from '../utils/Constants';
 import LottieView from 'lottie-react-native';
-import Animated from 'react-native-reanimated';
 import { goBack, navigate } from '../utils/NavigationUtil';
 import dgram from 'react-native-udp';
-
-
-const devicesNames = [
-  'Oppo',
-  'Vivo Y21',
-  'Redmi',
-  'Samsumg S24',
-  'iphone 14',
-  'OnePlus Nord',
-];
+import { parseConnectionPayload } from '../utils/networkUtils';
 
 const SendScreen = () => {
-  const {connectToServer , isConnected} = useTCP();
+  const { connectToServer, isConnected } = useTCP();
 
   const [isScannerVisible, setIsScannerVisible] = useState(false);
-  const [nearbyDevices, setNearbyDevices] = useState([]);
-  const handleScan = (data:any)=>{
-    const [connectionData , deviceName] = data.replace('tcp://','').split('|');
-    const [host, port] = connectionData?.split(':');
-    // connection to server
-    connectToServer(host , parseInt(port,10) , deviceName);
-  }
+  const [nearbyDevices, setNearbyDevices] = useState<any[]>([]);
 
-  const handleGoBack = ()=>{
+  const handleScan = (data: any) => {
+    const target = parseConnectionPayload(data);
+    if (target) {
+      console.log(`[SendScreen] Connecting to ${target.host}:${target.port} (${target.deviceName})`);
+      connectToServer(target.host, target.port, target.deviceName);
+    } else {
+      console.warn('[SendScreen] Could not parse connection target:', data);
+    }
+  };
+
+  const handleGoBack = () => {
     goBack();
-  }
+  };
 
-  const listenForDevices = async ()=>{
+  const listenForDevices = () => {
     const server = dgram.createSocket({
       type: 'udp4',
-      reusePort:true
+      reusePort: true,
     });
     const port = 57143;
-    server.bind(port , ()=>{
-      console.log("Listening for nearby devices");
-    })
-    server.on('message' , (msg , rinfo)=>{
-      const [connectionData , otherDevice] = msg?.toString()?.replace('tcp://','').split('|');
-      setNearbyDevices((prevDevices:any) => {
-        const deviceExists = prevDevices?.some((device:any)=> device?.name === otherDevice);
-        if(!deviceExists){
+
+    server.bind(port, () => {
+      console.log('[SendScreen] Listening for nearby devices on port', port);
+    });
+
+    server.on('message', (msg, rinfo) => {
+      const rawMsg = msg?.toString() || '';
+      const target = parseConnectionPayload(rawMsg);
+      if (!target) return;
+
+      setNearbyDevices((prevDevices: any[]) => {
+        const deviceExists = prevDevices?.some(
+          (device: any) => device?.name === target.deviceName,
+        );
+        if (!deviceExists) {
           const newDevice = {
-            id : `${Date.now()}_${Math.random()}`,
-            name : otherDevice,
-            image:require('../assets/icons/device.jpeg'),
-            fullAdress : msg?.toString(),
-            position : getRandomPosition(150 ,prevDevices?.map((d:any)=> d.position) , 50), // @ts-ignore
-            scale:new Animated.Value(0)
-          };//@ts-ignore
-          Animated.timing(newDevice.scale , {
-            toValue:1,
-            duration:1000,
-            easing:Easing.out(Easing.ease),
-            useNativeDriver:true
+            id: `${Date.now()}_${Math.random()}`,
+            name: target.deviceName,
+            host: target.host,
+            port: target.port,
+            image: require('../assets/icons/device.jpeg'),
+            fullAdress: rawMsg,
+            position: getRandomPosition(
+              150,
+              prevDevices?.map((d: any) => d.position),
+              50,
+            ),
+            scale: new Animated.Value(0),
+          };
+
+          Animated.timing(newDevice.scale, {
+            toValue: 1,
+            duration: 1000,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
           }).start();
-          return [...prevDevices , newDevice];
-         
+
+          return [...prevDevices, newDevice];
         }
         return prevDevices;
-  
       });
-    })
-  }
+    });
+
+    server.on('error', err => {
+      console.warn('[SendScreen] UDP server error:', err);
+    });
+
+    return server;
+  };
 
   const getRandomPosition = (
-    radius :number,
-    existingPositions : {x:number , y:number}[],
-    minDistance :number,
+    radius: number,
+    existingPositions: { x: number; y: number }[],
+    minDistance: number,
   ) => {
-    let position :any ;
+    let position: any;
     let isOverlapping;
-    do{
-      const angle = Math.random()*360;
-      const distance  = Math.random()*(radius-50)+50;
+    let attempts = 0;
+    do {
+      const angle = Math.random() * 360;
+      const distance = Math.random() * (radius - 50) + 50;
       position = {
-        x : distance * Math.cos((angle + Math.PI)/180),
-        y : distance * Math.sin((angle + Math.PI)/180),
+        x: distance * Math.cos(((angle + Math.PI) * Math.PI) / 180),
+        y: distance * Math.sin(((angle + Math.PI) * Math.PI) / 180),
       };
-      isOverlapping = existingPositions.some((existingPosition) => {
-        const distance = Math.sqrt(
+      isOverlapping = existingPositions?.some(existingPosition => {
+        if (!existingPosition) return false;
+        const dist = Math.sqrt(
           (existingPosition.x - position.x) ** 2 +
-            (existingPosition.y - position.y) ** 2
+            (existingPosition.y - position.y) ** 2,
         );
-        return distance < minDistance;
+        return dist < minDistance;
       });
-    }while(isOverlapping);
-    return position;
+      attempts++;
+    } while (isOverlapping && attempts < 20);
 
-  }
+    return position;
+  };
 
   useEffect(() => {
-    if(isConnected){
+    if (isConnected) {
       navigate('ConnectionScreen');
     }
-    
   }, [isConnected]);
 
   useEffect(() => {
-    let udpServer:any ;
-    const setupServer = async () => {
-      udpServer = await listenForDevices();
+    let udpServer: any;
+    try {
+      udpServer = listenForDevices();
+    } catch (e) {
+      console.warn('[SendScreen] Error starting UDP listener:', e);
     }
-    setupServer();
-    return ()=>{
-      if(udpServer){
-        udpServer.close(()=>{
-          console.log('udp server closed');
-        });
+
+    return () => {
+      if (udpServer) {
+        try {
+          udpServer.close();
+          console.log('[SendScreen] UDP listener closed');
+        } catch (e) {
+          console.warn('[SendScreen] Error closing UDP server:', e);
+        }
       }
       setNearbyDevices([]);
-    }
-    
-  },[])
-
-
-
-
-
-
+    };
+  }, []);
 
   return (
     <LinearGradient
       colors={['#007Aff', '#80BFFF']}
       style={sendStyles.container}
-      start={{ x: 0, y: 1}}
+      start={{ x: 0, y: 1 }}
       end={{ x: 0, y: 0 }}
     >
       <SafeAreaView />
 
       <View style={sendStyles.mainContainer}>
         <View style={sendStyles.infoContainer}>
-
-        <Icon
-        name='search'
-        iconsFamily='Ionicons'
-        color='#fff'
-        size={40}
-        />
-        <CustomText
-        fontFamily='OKRA-Bold'
-        fontSize={16}
-        color='#fff'
-        style={{textAlign:'center'}}
-        >
-          Ensure your device's hotspot is acitve and the receiver device is connected to it
-        </CustomText>
-        <BreakerText text='Or' />
-        <TouchableOpacity onPress={() => setIsScannerVisible(true)}>
-          <Icon
-          name='qrcode-scan'
-          iconsFamily='MaterialCommunityIcons'
-          color={Colors.primary}
-          size={16}
-          />
+          <Icon name="search" iconsFamily="Ionicons" color="#fff" size={40} />
           <CustomText
-          fontFamily='OKRA-Bold'
-          color={Colors.primary}
-          >Scan QR</CustomText>
-        </TouchableOpacity>
+            fontFamily="OKRA-Bold"
+            fontSize={16}
+            color="#fff"
+            style={{ textAlign: 'center' }}
+          >
+            Ensure both devices are on the same Wi-Fi or Personal Hotspot
+          </CustomText>
+          <BreakerText text="Or" />
+          <TouchableOpacity onPress={() => setIsScannerVisible(true)}>
+            <Icon
+              name="qrcode-scan"
+              iconsFamily="MaterialCommunityIcons"
+              color={Colors.primary}
+              size={16}
+            />
+            <CustomText fontFamily="OKRA-Bold" color={Colors.primary}>
+              Scan QR
+            </CustomText>
+          </TouchableOpacity>
         </View>
 
         <View style={sendStyles.animationContainer}>
           <View style={sendStyles.lottieContainer}>
-            <LottieView 
-            style={sendStyles.lottie}
-            source={require('../assets/animations/scanner.json')}
-            autoPlay
-            loop={true}
-            hardwareAccelerationAndroid
+            <LottieView
+              style={sendStyles.lottie}
+              source={require('../assets/animations/scanner.json')}
+              autoPlay
+              loop={true}
+              hardwareAccelerationAndroid
             />
-            {
-              nearbyDevices?.map((device:any , index)=>(
-                <Animated.View
-                key={index}
+            {nearbyDevices?.map((device: any, index) => (
+              <Animated.View
+                key={device.id || index}
                 style={[
                   sendStyles.deviceDot,
-                  { 
-                    transform: [{scale: device.scale}],
-                    left: screenWidth/2.33 + device.position?.x,
-                    top: screenWidth / 2.2 + device.position?.y
-                  }
+                  {
+                    transform: [{ scale: device.scale }],
+                    left: screenWidth / 2.33 + (device.position?.x || 0),
+                    top: screenWidth / 2.2 + (device.position?.y || 0),
+                  },
                 ]}
-                 >
-                  <TouchableOpacity
-                  onPress={()=>handleScan(device?.fullAdress)}
+              >
+                <TouchableOpacity
+                  onPress={() => handleScan(device?.fullAdress)}
                   style={sendStyles.popup}
-                  >
-                    <Image
+                >
+                  <Image
                     source={device.image}
                     style={sendStyles.deviceImage}
-                     />
-                     <CustomText
-                     fontFamily='OKRA-Bold'
-                     color='#333'
-                     fontSize={8}
-                     style={sendStyles.deviceText}
-                     >{device.name}</CustomText>
-                  </TouchableOpacity>
-
-                </Animated.View>
-              ))
-            }
+                  />
+                  <CustomText
+                    fontFamily="OKRA-Bold"
+                    color="#333"
+                    fontSize={8}
+                    style={sendStyles.deviceText}
+                  >
+                    {device.name}
+                  </CustomText>
+                </TouchableOpacity>
+              </Animated.View>
+            ))}
           </View>
           <Image
-          source={require('../assets/images/profile.jpg')}
-          style={sendStyles.profileImage}
-           />
+            source={require('../assets/images/profile.jpg')}
+            style={sendStyles.profileImage}
+          />
         </View>
         <TouchableOpacity onPress={handleGoBack} style={sendStyles.backButton}>
-          <Icon 
-          name='arrow-back'
-          iconsFamily='Ionicons'
-          color='#000'
-          size={16}
-           />
+          <Icon
+            name="arrow-back"
+            iconsFamily="Ionicons"
+            color="#000"
+            size={16}
+          />
         </TouchableOpacity>
-
       </View>
 
-      {
-        isScannerVisible && (
-          <QRScannerModel
-            visible={isScannerVisible}
-            onClose={() => setIsScannerVisible(false)}
-          />
-        )
-      }
+      {isScannerVisible && (
+        <QRScannerModel
+          visible={isScannerVisible}
+          onClose={() => setIsScannerVisible(false)}
+        />
+      )}
     </LinearGradient>
   );
 };

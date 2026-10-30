@@ -2,8 +2,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
-  
-  Touchable,
   TouchableOpacity,
   Image,
   Platform,
@@ -23,14 +21,17 @@ import { useTCP } from '../services/TCPProvider';
 import {
   getBroadcastIPAddress,
   getLocalIPAddress,
+  createDiscoveryBeacon,
 } from '../utils/networkUtils';
 import dgram from 'react-native-udp';
+import { Buffer } from 'buffer';
 
 const ReceiveScreen: FC = () => {
   const { startServer, server, isConnected } = useTCP();
   const [qrvalue, setQrvalue] = useState('');
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
   const setupServer = async () => {
     const deviceName = await DeviceInfo.getDeviceName();
     const ip = await getLocalIPAddress();
@@ -38,59 +39,60 @@ const ReceiveScreen: FC = () => {
     if (!server) {
       startServer(port);
     }
-    const qrValue = `tcp://${ip}:${port}|${deviceName}`;
-    setQrvalue(qrValue);
-    console.log(`Server info : ${ip}:${port}`);
+    const beacon = createDiscoveryBeacon(ip, port, deviceName);
+    setQrvalue(beacon);
+    console.log(`[ReceiveScreen] Server active at ${ip}:${port}`);
   };
 
   const sendDiscoverySignal = async () => {
-    const deviceName = await DeviceInfo.getDeviceName();
-    const broadcastAddress = await getBroadcastIPAddress();
-    const targetAddesss = broadcastAddress || '255.255.255.255';
-    const port = 57143;
-    const client = dgram.createSocket({
-      type: 'udp4',
-      reusePort: true,
-    });
+    if (!qrvalue) return;
 
-    client.bind(() => {
-      try {
-        if (Platform.OS === 'ios') {
-          client.setBroadcast(true);
+    try {
+      const broadcastAddress = await getBroadcastIPAddress();
+      const targetAddress = broadcastAddress || '255.255.255.255';
+      const port = 57143;
+      const client = dgram.createSocket({
+        type: 'udp4',
+        reusePort: true,
+      });
+
+      client.bind(() => {
+        try {
+          if (Platform.OS === 'ios') {
+            client.setBroadcast(true);
+          }
+          const buf = Buffer.from(qrvalue, 'utf8');
+          client.send(
+            buf,
+            0,
+            buf.length,
+            port,
+            targetAddress,
+            err => {
+              if (err) {
+                console.warn('[ReceiveScreen] Error sending discovery broadcast:', err);
+              }
+              client.close();
+            },
+          );
+        } catch (error) {
+          console.warn('[ReceiveScreen] Error in UDP client send:', error);
+          client.close();
         }
-        client.send(
-          `${qrvalue}`,
-          0,
-          `${qrvalue}`.length,
-          port,
-          targetAddesss,
-          err => {
-            if (err) {
-              console.error('Error sending discovery signal:', err);
-              return;
-            } else {
-              console.log(
-                `${deviceName} sent discovery signal to ${targetAddesss}:${port}`,
-              );
-            }
-            client.close();
-          },
-        );
-      } catch (error) {
-        console.log('failed to set broadcast or send', error);
-        client.close();
-      }
-    });
+      });
+    } catch (e) {
+      console.warn('[ReceiveScreen] UDP broadcast exception:', e);
+    }
   };
 
   useEffect(() => {
-    if(!qrvalue) return;
+    if (!qrvalue) return;
     sendDiscoverySignal();
     intervalRef.current = setInterval(() => {
       sendDiscoverySignal();
     }, 3000);
     return () => {
-      if(intervalRef.current){
+      if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -98,25 +100,22 @@ const ReceiveScreen: FC = () => {
   }, [qrvalue]);
 
   const handleGoBack = () => {
-    if(intervalRef.current){
+    if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
     goBack();
-  }
-    
+  };
 
   useEffect(() => {
     if (isConnected) {
-      if(intervalRef.current){
+      if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      navigate("ConnectionScreen");
+      navigate('ConnectionScreen');
     }
   }, [isConnected]);
-
-
 
   useEffect(() => {
     setupServer();
@@ -153,7 +152,7 @@ const ReceiveScreen: FC = () => {
             style={{ textAlign: 'center' }}
             fontSize={12}
           >
-            Ensure your device is connected to the sender's hotspot network
+            Ensure your device is connected to the same Wi-Fi or Hotspot network
           </CustomText>
           <BreakerText text="OR" />
 
@@ -168,7 +167,7 @@ const ReceiveScreen: FC = () => {
               size={16}
             />
             <CustomText fontFamily="OKRA-Bold" color={Colors.primary}>
-              Scan QR
+              Generate QR
             </CustomText>
           </TouchableOpacity>
         </View>
