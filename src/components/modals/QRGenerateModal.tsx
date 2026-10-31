@@ -96,7 +96,7 @@ const QRGenerateModal: FC<ModalProps> = ({ visible, onClose }) => {
               logoBackgroundColor="#fff"
               logoMargin={2}
               logoBorderRadius={10}
-              logo={require('../../assets/images/profile2.jpg')}
+              logo={require('../../assets/images/profile.jpg')}
               linearGradient={multiColor}
               enableLinearGradient
             />
