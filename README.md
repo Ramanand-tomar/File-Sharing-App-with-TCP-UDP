@@ -13,7 +13,7 @@
 
 **AirShare** is an open-source, production-grade mobile peer-to-peer (P2P) file sharing application built with React Native and TypeScript. It enables blazing-fast, direct device-to-device file transfers across local Wi-Fi or Personal Hotspots at speeds up to **50+ MB/s** — **without internet access, cloud servers, or third-party tracking**.
 
-[📥 Download Latest APK](https://github.com/Ramanand-tomar/File-Sharing-App-with-TCP-UDP/releases/latest/download/app-release.apk) • [⚡ Key Features](#-key-features) • [📱 App Screenshots](#-app-screenshots) • [🏗️ Architecture & Protocol](#-architecture--protocol-specification) • [🚀 Getting Started](#-getting-started)
+[📥 Download Latest APK](https://drive.google.com/file/d/1GwXxvr8agXpKAxB1K8ooUXjRkevE5eCq/view?usp=drive_link) • [⚡ Key Features](#-key-features) • [📱 App Screenshots](#-app-screenshots) • [🏗️ Architecture & Protocol](#-architecture--protocol-specification) • [🚀 Getting Started](#-getting-started)
 
 </div>
 
