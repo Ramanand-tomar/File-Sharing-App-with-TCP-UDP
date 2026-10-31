@@ -5,6 +5,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Standalone APKs
@@ -54,3 +57,27 @@ jobs:
             android/app/build/outputs/apk/release/*.apk
             android/app/build/outputs/apk/debug/*.apk
           retention-days: 14
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0.0-release
+          name: "AirShare v1.0.0 Standalone APKs"
+          body: |
+            ### 🚀 AirShare P2P File Sharing (Production v1.0.0)
+
+            Direct download links for offline mobile installation:
+            - **`app-release.apk` (Recommended)**: Standalone production APK with pre-compiled Hermes bytecode, fully optimized.
+            - **`app-debug.apk`**: Standalone debug build with developer inspection support.
+
+            #### 📲 Features:
+            - ⚡ **Offline & Standalone**: Pre-bundled JavaScript (No PC, Metro, or USB required).
+            - 📡 **UDP Peer Discovery**: Automatically finds nearby devices on the same Wi-Fi / Hotspot.
+            - 📦 **Framed TCP Binary Streaming**: Bounded sliding-window chunk streaming without memory bloat.
+            - 🔒 **End-to-End SHA-256 Integrity**: Automatic file verification upon completion.
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
